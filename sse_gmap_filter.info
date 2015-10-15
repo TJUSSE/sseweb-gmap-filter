@@ -1,0 +1,5 @@
+name = SSE Google Maps Filter
+description = Filter to embed Google Maps.
+version = 7.x-0.1
+core = 7.x
+package = SSE

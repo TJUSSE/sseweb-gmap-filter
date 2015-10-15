@@ -1,0 +1,100 @@
+<?php
+
+/**
+ * Implements hook_filter_info().
+ */
+function sse_gmap_filter_filter_info() {
+  $filters = array();
+  $filters['sse_gmap_filter'] = array(
+    'title' => t('谷歌地图过滤'),
+    'description' => t('将 [gmap:query] 替换成谷歌嵌入式地图'),
+    'process callback' => '_sse_gmap_filter_process',
+    'settings callback' => '_sse_gmap_filter_settings',
+    'default settings' => array(
+      'sse_gmap_filter_width' => '600',
+      'sse_gmap_filter_height' => '450',
+      'sse_gmap_filter_domain' => 'http://www.google.cn',
+    ),
+    'tips callback' => '_sse_gmap_filter_tips',
+    'weight' => -1,
+  );
+  return $filters;
+}
+
+function _sse_gmap_filter_settings($form, &$form_state, $filter, $format, $defaults, $filters) {
+  $settings['sse_gmap_filter_width'] = array(
+    '#type' => 'textfield',
+    '#title' => t('默认地图宽度'),
+    '#default_value' => isset($filter->settings['sse_gmap_filter_width']) ? $filter->settings['sse_gmap_filter_width'] : $defaults['sse_gmap_filter_width'],
+    '#maxlength' => 4,
+  );
+  $settings['sse_gmap_filter_height'] = array(
+    '#type' => 'textfield',
+    '#title' => t('默认地图高度'),
+    '#default_value' => isset($filter->settings['sse_gmap_filter_height']) ? $filter->settings['sse_gmap_filter_height'] : $defaults['sse_gmap_filter_height'],
+    '#maxlength' => 4,
+  );
+  $settings['sse_gmap_filter_domain'] = array(
+    '#type' => 'textfield',
+    '#title' => t('地图前缀地址'),
+    '#default_value' => isset($filter->settings['sse_gmap_filter_domain']) ? $filter->settings['sse_gmap_filter_domain'] : $defaults['sse_gmap_filter_domain']
+  );
+  return $settings;
+}
+
+function _sse_gmap_filter_tips($filter, $format, $long = FALSE) {
+  if ($long) {
+    return t('
+      <p>嵌入谷歌地图：<code>[gmap:URL]</code>，指定长宽 <code>[gmap:URL width:600 height:450]</code></p>
+      <p><code>URL</code> 必须以 <code>/maps/embed</code> 开头。您可以<a href="https://developers.google.com/maps/documentation/embed/start" target="_blank">使用 API 生成该地址（支持多语言，但不支持路线）</a>，或直接使用谷歌地图中的分享功能生成地址（不支持多语言，但支持具体路线）。</a></p>
+      ');
+  } else {
+    return t('您可以通过输入 [gmap:URL] 来嵌入谷歌地图。');
+  }
+}
+
+function _sse_gmap_filter_process($text, $filter, $format, $langcode, $cache, $cache_id) {
+  if (preg_match_all('/\[gmap(\:(.+))?( .+)?\]/isU', $text, $matches_code)) {
+    foreach ($matches_code[0] as $ci => $code) {
+      $gmap = array(
+        'src' => $matches_code[2][$ci],
+      );
+
+      // 必须以 /maps/embed 开头
+      if (strpos($gmap['src'], '/maps/embed') !== 0) {
+        continue;
+      }
+
+      $gmap['src'] = $filter->settings['sse_gmap_filter_domain'].$gmap['src'];
+
+      if ($matches_code[3][$ci] && preg_match_all('/\s+([a-zA-Z_]+)\:(\s+)?([0-9a-zA-Z\/]+)/i', $matches_code[3][$ci], $matches_attributes)) {
+        foreach ($matches_attributes[0] as $ai => $attribute) {
+          $gmap[$matches_attributes[1][$ai]] = $matches_attributes[3][$ai];
+        }
+      }
+
+      if (!isset($gmap['width'])) {
+        $gmap['width'] = $filter->settings['sse_gmap_filter_width'];
+      }
+      if (!isset($gmap['height'])) {
+        $gmap['height'] = $filter->settings['sse_gmap_filter_height'];
+      }
+
+      $replacement = _sse_gmap_filter_generate_html($gmap);
+
+      $text = str_replace($code, $replacement, $text);
+    }
+  }
+  return $text;
+}
+
+function _sse_gmap_filter_generate_html(&$gmap) {
+  $output = '<iframe src="';
+  $output .= $gmap['src'];
+  $output .= '" width="';
+  $output .= $gmap['width'];
+  $output .= '" height="';
+  $output .= $gmap['height'];
+  $output .= '" frameborder="0" style="border:0" allowfullscreen></iframe>';
+  return $output;
+}
